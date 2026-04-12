@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import NewMember from "./NewMember.jsx";
 
 const SCCU_API = "http://127.0.0.1:3001";
 
@@ -10,6 +11,8 @@ const TYPE_MAP = {
   "pedro.coc@sccu.bz":      { type: "Trade",        initials: "PC" },
   "diana.cal@sccu.bz":      { type: "Community",    initials: "DC" },
   "miguel.tzul@sccu.bz":    { type: "Agricultural", initials: "MT" },
+  "keisha.young@sccu.bz":   { type: "Community",    initials: "KY" },
+  "samuel.flowers@sccu.bz": { type: "Community",    initials: "SF" },
 };
 
 const TYPE_COLORS = {
@@ -60,6 +63,7 @@ export default function SCCUDashboard() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [stats, setStats] = useState(null);
+  const [showNewMember, setShowNewMember] = useState(false);
 
   useEffect(() => {
     fetch(`${SCCU_API}/health`)
@@ -235,7 +239,14 @@ export default function SCCUDashboard() {
         </div>
       )}
 
-      {tab === "Members" && (
+      {tab === "Members" && showNewMember && (
+        <NewMember
+          onSuccess={(member) => { setShowNewMember(false); fetchData(); }}
+          onCancel={() => setShowNewMember(false)}
+        />
+      )}
+
+      {tab === "Members" && !showNewMember && (
         <div>
           {selectedMember ? (
             <div>
@@ -280,17 +291,23 @@ export default function SCCUDashboard() {
             </div>
           ) : (
             <div>
-              <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>{accounts.length} founding members · Live from PostgreSQL · Click to view details</p>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <p style={{ margin: 0, color: "#888", fontSize: 13 }}>{accounts.length} members · Live from PostgreSQL · Click to view details</p>
+            <button onClick={() => setShowNewMember(true)} style={{ padding: "9px 18px", fontSize: 13, fontWeight: 600, border: "none", borderRadius: 8, background: "#0F6E56", color: "#fff", cursor: "pointer" }}>
+              + New member
+            </button>
+          </div>
               <div style={{ border: "1px solid #e8e8e8", borderRadius: 12, overflow: "hidden" }}>
                 {accounts.map((a, i) => {
                   const info = TYPE_MAP[a.owner_email] || {};
+                  const autoInitials = (a.owner_name || '').split(' ').map(w=>w[0]?.toUpperCase()||'').join('').slice(0,2);
                   return (
                     <div key={a.id} onClick={() => setSelectedMember(a)}
                       style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px", cursor: "pointer", background: "#fff", borderBottom: i < accounts.length - 1 ? "1px solid #f0f0f0" : "none", transition: "background .15s" }}
                       onMouseEnter={e => e.currentTarget.style.background = "#f7f7f5"}
                       onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
                       <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: "#185FA5", flexShrink: 0 }}>
-                        {info.initials || "??"}
+                        {info.initials || autoInitials || "??"}
                       </div>
                       <div style={{ flex: 1 }}>
                         <p style={{ margin: "0 0 3px", fontWeight: 500, fontSize: 14 }}>{a.owner_name}</p>
@@ -326,6 +343,7 @@ export default function SCCUDashboard() {
               <tbody>
                 {accounts.map((a, i) => {
                   const info = TYPE_MAP[a.owner_email] || {};
+                  const autoInitials = (a.owner_name || '').split(' ').map(w=>w[0]?.toUpperCase()||'').join('').slice(0,2);
                   return (
                     <tr key={a.id} style={{ borderBottom: i < accounts.length - 1 ? "1px solid #f0f0f0" : "none" }}>
                       <td style={{ padding: "14px", fontWeight: 500 }}>{a.owner_name}</td>
@@ -413,3 +431,4 @@ export default function SCCUDashboard() {
     </div>
   );
 }
+// This file has been updated - please refresh
