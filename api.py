@@ -331,3 +331,122 @@ async def create_member(body: dict):
             "currency": "BZD",
         }
     }
+
+from datetime import datetime
+
+@app.post("/transactions")
+async def post_transaction(body: dict):
+    from_account = body.get("from_account_id")
+    to_account   = body.get("to_account_id")
+    amount       = float(body.get("amount", 0))
+    description  = body.get("description", "Member transfer")
+    txn_type     = body.get("type", "TRANSFER")
+
+    if not from_account or not to_account:
+        raise HTTPException(status_code=400, detail="from_account_id and to_account_id are required")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    if from_account == to_account:
+        raise HTTPException(status_code=400, detail="Cannot transfer to same account")
+
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # Check sender balance
+    cur.execute("SELECT accountbalance, accountlabel FROM mappedbankaccount WHERE theaccountid = %s", (from_account,))
+    sender = cur.fetchone()
+    if not sender:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Sender account not found")
+    if sender["accountbalance"] < amount:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Insufficient funds. Balance: BZD {sender['accountbalance']:.2f}")
+
+    # Check receiver exists
+    cur.execute("SELECT accountbalance, accountlabel FROM mappedbankaccount WHERE theaccountid = %s", (to_account,))
+    receiver = cur.fetchone()
+    if not receiver:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Receiver account not found")
+
+    # Debit sender
+    cur.execute("""
+        UPDATE mappedbankaccount 
+        SET accountbalance = accountbalance - %s,
+            accountlastupdate = NOW()
+        WHERE theaccountid = %s
+    """, (amount, from_account))
+
+    # Credit receiver
+    cur.execute("""
+        UPDATE mappedbankaccount
+        SET accountbalance = accountbalance + %s,
+            accountlastupdate = NOW()
+        WHERE theaccountid = %s
+    """, (amount, to_account))
+
+    # Record transaction in sccu ledger
+    txn_id = f"txn-{from_account[:8]}-{int(datetime.now().timestamp())}"
+    cur.execute("""
+        INSERT INTO sccu_transactions
+          (txn_id, from_account, to_account, amount, currency,
+           txn_type, description, status)
+        VALUES (%s, %s, %s, %s, 'BZD', %s, %s, 'completed')
+        ON CONFLICT DO NOTHING
+    """, (txn_id, from_account, to_account, amount, txn_type, description))
+
+    conn.commit()
+
+    # Return updated balances
+    cur.execute("SELECT accountbalance FROM mappedbankaccount WHERE theaccountid = %s", (from_account,))
+    new_sender_bal = cur.fetchone()["accountbalance"]
+    cur.execute("SELECT accountbalance FROM mappedbankaccount WHERE theaccountid = %s", (to_account,))
+    new_receiver_bal = cur.fetchone()["accountbalance"]
+    conn.close()
+
+    return {
+        "success": True,
+        "transaction_id": txn_id,
+        "from_account": from_account,
+        "to_account": to_account,
+        "amount": amount,
+        "currency": "BZD",
+        "description": description,
+        "sender_new_balance": new_sender_bal,
+        "receiver_new_balance": new_receiver_bal,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+@app.get("/transactions/{account_id}")
+def get_transactions(account_id: str):
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("""
+        SELECT
+            t.txn_id,
+            t.txn_type as type,
+            t.description,
+            t.amount,
+            t.currency,
+            t.status,
+            t.created_at,
+            CASE
+                WHEN t.to_account = %s THEN 'credit'
+                ELSE 'debit'
+            END as direction,
+            CASE
+                WHEN t.to_account = %s THEN t.amount
+                ELSE -t.amount
+            END as net_amount,
+            fa.accountlabel as from_label,
+            ta.accountlabel as to_label
+        FROM sccu_transactions t
+        LEFT JOIN mappedbankaccount fa ON fa.theaccountid = t.from_account
+        LEFT JOIN mappedbankaccount ta ON ta.theaccountid = t.to_account
+        WHERE t.from_account = %s OR t.to_account = %s
+        ORDER BY t.created_at DESC
+        LIMIT 50
+    """, (account_id, account_id, account_id, account_id))
+    rows = cur.fetchall()
+    conn.close()
+    return {"account_id": account_id, "transactions": [dict(r) for r in rows]}
