@@ -1,0 +1,12 @@
+{
+  "banks": [],
+  "users": [
+    {
+      "email": "test.member@sccu.bz",
+      "password": "Sccu2026#Test",
+      "user_name": "test.member@sccu.bz"
+    }
+  ],
+  "accounts": [],
+  "transactions": []
+}

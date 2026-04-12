@@ -1,0 +1,26 @@
+{
+  "banks": [],
+  "users": [
+    {
+      "email": "maria.santos@sccu.bz",
+      "password": "Sccu2026#Maria",
+      "user_name": "maria.santos@sccu.bz"
+    }
+  ],
+  "accounts": [
+    {
+      "id": "sccu-test-001",
+      "bank": "93dba562-eb4f-4a69-949f-0fe9bb6a5644",
+      "label": "Test Account",
+      "number": "TEST-001",
+      "type": "SHARE_SAVINGS",
+      "balance": {"currency": "BZD", "amount": "100.00"},
+      "IBAN": "",
+      "owners": ["maria.santos@sccu.bz"],
+      "generate_public_view": false,
+      "generate_accountants_view": false,
+      "generate_auditors_view": false
+    }
+  ],
+  "transactions": []
+}

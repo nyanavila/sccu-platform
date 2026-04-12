@@ -1,0 +1,219 @@
+{
+  "banks": [
+    {
+      "id": "bz.sccu",
+      "short_name": "SCCU",
+      "full_name": "Sensu Community Credit Union and Financial Services",
+      "logo": "https://sensu.bz/logo.png",
+      "website": "https://sensu.bz"
+    }
+  ],
+  "users": [
+    {"email": "maria.santos@sccu.bz", "password": "Sccu2026#Maria", "user_name": "Maria Santos"},
+    {"email": "carlos.palacio@sccu.bz", "password": "Sccu2026#Carlos", "user_name": "Carlos Palacio"},
+    {"email": "rose.aranda@sccu.bz", "password": "Sccu2026#Rose", "user_name": "Rose Aranda"},
+    {"email": "james.westby@sccu.bz", "password": "Sccu2026#James", "user_name": "James Westby"},
+    {"email": "pedro.coc@sccu.bz", "password": "Sccu2026#Pedro", "user_name": "Pedro Coc"},
+    {"email": "diana.cal@sccu.bz", "password": "Sccu2026#Diana", "user_name": "Diana Cal"},
+    {"email": "miguel.tzul@sccu.bz", "password": "Sccu2026#Miguel", "user_name": "Miguel Tzul"}
+  ],
+  "accounts": [
+    {
+      "id": "sccu-savings-maria-001",
+      "bank": "bz.sccu",
+      "label": "Maria Santos Share Savings",
+      "number": "SCCU-2026-0001",
+      "type": "SHARE_SAVINGS",
+      "balance": {"currency": "BZD", "amount": "2400.00"},
+      "IBAN": "",
+      "owners": ["Maria Santos"],
+      "generate_public_view": false,
+      "generate_accountants_view": true,
+      "generate_auditors_view": true
+    },
+    {
+      "id": "sccu-savings-carlos-001",
+      "bank": "bz.sccu",
+      "label": "Carlos Palacio Business Share Account",
+      "number": "SCCU-2026-0002",
+      "type": "SHARE_SAVINGS",
+      "balance": {"currency": "BZD", "amount": "18750.00"},
+      "IBAN": "",
+      "owners": ["Carlos Palacio"],
+      "generate_public_view": false,
+      "generate_accountants_view": true,
+      "generate_auditors_view": true
+    },
+    {
+      "id": "sccu-savings-rose-001",
+      "bank": "bz.sccu",
+      "label": "Rose Aranda Agricultural Share Account",
+      "number": "SCCU-2026-0003",
+      "type": "SHARE_SAVINGS",
+      "balance": {"currency": "BZD", "amount": "5200.00"},
+      "IBAN": "",
+      "owners": ["Rose Aranda"],
+      "generate_public_view": false,
+      "generate_accountants_view": true,
+      "generate_auditors_view": true
+    },
+    {
+      "id": "sccu-savings-james-001",
+      "bank": "bz.sccu",
+      "label": "James Westby Diaspora Share Account",
+      "number": "SCCU-2026-0004",
+      "type": "SHARE_SAVINGS",
+      "balance": {"currency": "BZD", "amount": "34800.00"},
+      "IBAN": "",
+      "owners": ["James Westby"],
+      "generate_public_view": false,
+      "generate_accountants_view": true,
+      "generate_auditors_view": true
+    },
+    {
+      "id": "sccu-savings-pedro-001",
+      "bank": "bz.sccu",
+      "label": "Pedro Coc Trade Member Account",
+      "number": "SCCU-2026-0005",
+      "type": "SHARE_SAVINGS",
+      "balance": {"currency": "BZD", "amount": "7600.00"},
+      "IBAN": "",
+      "owners": ["Pedro Coc"],
+      "generate_public_view": false,
+      "generate_accountants_view": true,
+      "generate_auditors_view": true
+    },
+    {
+      "id": "sccu-savings-diana-001",
+      "bank": "bz.sccu",
+      "label": "Diana Cal Community Account",
+      "number": "SCCU-2026-0006",
+      "type": "SHARE_SAVINGS",
+      "balance": {"currency": "BZD", "amount": "1850.00"},
+      "IBAN": "",
+      "owners": ["Diana Cal"],
+      "generate_public_view": false,
+      "generate_accountants_view": true,
+      "generate_auditors_view": true
+    },
+    {
+      "id": "sccu-savings-miguel-001",
+      "bank": "bz.sccu",
+      "label": "Miguel Tzul Rural Agricultural Account",
+      "number": "SCCU-2026-0007",
+      "type": "SHARE_SAVINGS",
+      "balance": {"currency": "BZD", "amount": "3100.00"},
+      "IBAN": "",
+      "owners": ["Miguel Tzul"],
+      "generate_public_view": false,
+      "generate_accountants_view": true,
+      "generate_auditors_view": true
+    }
+  ],
+  "transactions": [
+    {
+      "id": "txn-maria-001",
+      "this_account": {"id": "sccu-savings-maria-001", "bank": "bz.sccu"},
+      "counterparty": {"name": "Founding Share Purchase", "account_number": "SCCU-CAP-0001"},
+      "details": {
+        "type": "SHARE_PURCHASE",
+        "description": "Initial share purchase Maria Santos founding member",
+        "posted": "2026-04-01T09:00:00.000Z",
+        "completed": "2026-04-01T09:01:00.000Z",
+        "new_balance": "500.00",
+        "value": "500.00"
+      }
+    },
+    {
+      "id": "txn-maria-002",
+      "this_account": {"id": "sccu-savings-maria-001", "bank": "bz.sccu"},
+      "counterparty": {"name": "Belize Electricity Limited", "account_number": "BEL-PAY-001"},
+      "details": {
+        "type": "BILL_PAYMENT",
+        "description": "Monthly electricity bill payment BEL",
+        "posted": "2026-04-05T10:30:00.000Z",
+        "completed": "2026-04-05T10:30:00.000Z",
+        "new_balance": "2240.00",
+        "value": "-160.00"
+      }
+    },
+    {
+      "id": "txn-james-001",
+      "this_account": {"id": "sccu-savings-james-001", "bank": "bz.sccu"},
+      "counterparty": {"name": "Western Union USA Remittance", "account_number": "WU-USA-001"},
+      "details": {
+        "type": "REMITTANCE_IN",
+        "description": "Diaspora remittance USA to Belize BZD to USD 2 to 1 rate",
+        "posted": "2026-04-05T18:30:00.000Z",
+        "completed": "2026-04-05T18:32:00.000Z",
+        "new_balance": "34800.00",
+        "value": "32800.00"
+      }
+    },
+    {
+      "id": "txn-carlos-001",
+      "this_account": {"id": "sccu-savings-carlos-001", "bank": "bz.sccu"},
+      "counterparty": {"name": "Western Hardware Distributors", "account_number": "WHD-BZ-001"},
+      "details": {
+        "type": "SUPPLIER_PAYMENT",
+        "description": "Hardware stock purchase Q1 2026 Palacio Hardware and Supplies",
+        "posted": "2026-04-04T14:00:00.000Z",
+        "completed": "2026-04-04T14:01:00.000Z",
+        "new_balance": "18750.00",
+        "value": "-11250.00"
+      }
+    },
+    {
+      "id": "txn-rose-001",
+      "this_account": {"id": "sccu-savings-rose-001", "bank": "bz.sccu"},
+      "counterparty": {"name": "SCCU Agricultural Loan", "account_number": "SCCU-LN-2026-0003"},
+      "details": {
+        "type": "LOAN_DISBURSEMENT",
+        "description": "Agricultural loan disbursement citrus farm Cayo District",
+        "posted": "2026-04-02T10:00:00.000Z",
+        "completed": "2026-04-02T10:01:00.000Z",
+        "new_balance": "5200.00",
+        "value": "12000.00"
+      }
+    },
+    {
+      "id": "txn-miguel-001",
+      "this_account": {"id": "sccu-savings-miguel-001", "bank": "bz.sccu"},
+      "counterparty": {"name": "Toledo Cacao Growers Association", "account_number": "TCGA-2026"},
+      "details": {
+        "type": "COOPERATIVE_PAYOUT",
+        "description": "Cacao harvest cooperative payout Toledo District Q1 2026",
+        "posted": "2026-04-06T08:00:00.000Z",
+        "completed": "2026-04-06T08:01:00.000Z",
+        "new_balance": "3100.00",
+        "value": "2300.00"
+      }
+    },
+    {
+      "id": "txn-pedro-001",
+      "this_account": {"id": "sccu-savings-pedro-001", "bank": "bz.sccu"},
+      "counterparty": {"name": "Government of Belize Works Ministry", "account_number": "GOB-WORKS-PAY"},
+      "details": {
+        "type": "CONTRACT_PAYMENT",
+        "description": "Electrical works contract Belmopan government building",
+        "posted": "2026-04-08T15:00:00.000Z",
+        "completed": "2026-04-08T15:01:00.000Z",
+        "new_balance": "7600.00",
+        "value": "3800.00"
+      }
+    },
+    {
+      "id": "txn-diana-001",
+      "this_account": {"id": "sccu-savings-diana-001", "bank": "bz.sccu"},
+      "counterparty": {"name": "Central Market Belize City", "account_number": "MARKET-BC-001"},
+      "details": {
+        "type": "SALES_CREDIT",
+        "description": "Weekly market vendor sales deposit Central Market stall 14",
+        "posted": "2026-04-09T17:00:00.000Z",
+        "completed": "2026-04-09T17:00:00.000Z",
+        "new_balance": "1850.00",
+        "value": "500.00"
+      }
+    }
+  ]
+}
