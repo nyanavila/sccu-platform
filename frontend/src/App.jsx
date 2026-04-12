@@ -1,18 +1,16 @@
 import { useState, useEffect } from "react";
 
-const API = "http://127.0.0.1:8080";
-const BANK_ID = "93dba562-eb4f-4a69-949f-0fe9bb6a5644";
-const CONSUMER_KEY = "sccu-key-2026";
+const SCCU_API = "http://127.0.0.1:3001";
 
-const MEMBERS = [
-  { id: "sccu-savings-maria-001",   name: "Maria Santos",    type: "Community",    balance: 2400,  initials: "MS", email: "maria.santos@sccu.bz" },
-  { id: "sccu-savings-carlos-001",  name: "Carlos Palacio",  type: "Business",     balance: 18750, initials: "CP", email: "carlos.palacio@sccu.bz" },
-  { id: "sccu-savings-rose-001",    name: "Rose Aranda",     type: "Agricultural", balance: 5200,  initials: "RA", email: "rose.aranda@sccu.bz" },
-  { id: "sccu-savings-james-001",   name: "James Westby",    type: "Diaspora",     balance: 34800, initials: "JW", email: "james.westby@sccu.bz" },
-  { id: "sccu-savings-pedro-001",   name: "Pedro Coc",       type: "Trade",        balance: 7600,  initials: "PC", email: "pedro.coc@sccu.bz" },
-  { id: "sccu-savings-diana-001",   name: "Diana Cal",       type: "Community",    balance: 1850,  initials: "DC", email: "diana.cal@sccu.bz" },
-  { id: "sccu-savings-miguel-001",  name: "Miguel Tzul",     type: "Agricultural", balance: 3100,  initials: "MT", email: "miguel.tzul@sccu.bz" },
-];
+const TYPE_MAP = {
+  "maria.santos@sccu.bz":   { type: "Community",    initials: "MS" },
+  "carlos.palacio@sccu.bz": { type: "Business",     initials: "CP" },
+  "rose.aranda@sccu.bz":    { type: "Agricultural", initials: "RA" },
+  "james.westby@sccu.bz":   { type: "Diaspora",     initials: "JW" },
+  "pedro.coc@sccu.bz":      { type: "Trade",        initials: "PC" },
+  "diana.cal@sccu.bz":      { type: "Community",    initials: "DC" },
+  "miguel.tzul@sccu.bz":    { type: "Agricultural", initials: "MT" },
+};
 
 const TYPE_COLORS = {
   Community:    { bg: "#E6F1FB", text: "#185FA5" },
@@ -21,10 +19,6 @@ const TYPE_COLORS = {
   Diaspora:     { bg: "#EEEDFE", text: "#534AB7" },
   Trade:        { bg: "#E1F5EE", text: "#0F6E56" },
 };
-
-const fmt = (n) => new Intl.NumberFormat("en-BZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-const totalAssets = MEMBERS.reduce((s, m) => s + m.balance, 0);
-const TABS = ["Dashboard", "Members", "Accounts", "Compliance", "Settings"];
 
 const RECENT_TXN = [
   { date: "Apr 9",  member: "James Westby",   desc: "Diaspora remittance — Western Union USA",       amount: 32800, type: "credit" },
@@ -36,6 +30,24 @@ const RECENT_TXN = [
   { date: "Apr 2",  member: "Rose Aranda",     desc: "Agricultural loan disbursement — Cayo citrus",  amount: 12000, type: "credit" },
 ];
 
+const fmt = (n) => new Intl.NumberFormat("en-BZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+const TABS = ["Dashboard", "Members", "Accounts", "Compliance", "Settings"];
+
+const s = {
+  page: { fontFamily: "system-ui, sans-serif", fontSize: 14, color: "#1a1a1a", maxWidth: 1100, margin: "0 auto", padding: "0 24px 40px" },
+  header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0", borderBottom: "1px solid #e8e8e8", marginBottom: 20 },
+  logo: { width: 40, height: 40, borderRadius: "50%", background: "#0F6E56", display: "flex", alignItems: "center", justifyContent: "center" },
+  tabs: { display: "flex", gap: 2, borderBottom: "1px solid #e8e8e8", marginBottom: 24 },
+  grid4: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 },
+  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 },
+  metric: { background: "#f7f7f5", borderRadius: 10, padding: "1rem" },
+  card: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 12, padding: "1rem 1.25rem" },
+  badge: (type) => ({ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: TYPE_COLORS[type]?.bg || "#f0f0f0", color: TYPE_COLORS[type]?.text || "#888" }),
+  avatar: (initials) => ({ width: 40, height: 40, borderRadius: "50%", background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: "#185FA5", flexShrink: 0 }),
+  btn: { padding: "8px 16px", fontSize: 13, border: "1px solid #e8e8e8", borderRadius: 8, background: "#fff", cursor: "pointer" },
+  input: { width: "100%", padding: "10px 12px", fontSize: 14, border: "1px solid #e8e8e8", borderRadius: 8, boxSizing: "border-box", outline: "none" },
+};
+
 export default function SCCUDashboard() {
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("nyanavila_20");
@@ -46,65 +58,51 @@ export default function SCCUDashboard() {
   const [tab, setTab] = useState("Dashboard");
   const [apiStatus, setApiStatus] = useState("checking");
   const [selectedMember, setSelectedMember] = useState(null);
-  const [liveAccounts, setLiveAccounts] = useState([]);
-  const [obpVersion, setObpVersion] = useState("");
+  const [accounts, setAccounts] = useState([]);
+  const [stats, setStats] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/obp/v5.1.0/root`)
+    fetch(`${SCCU_API}/health`)
       .then(r => r.json())
-      .then(d => { setApiStatus("live"); setObpVersion(d.version || "v5.1.0"); })
+      .then(() => setApiStatus("live"))
       .catch(() => setApiStatus("offline"));
   }, []);
+
+  const fetchData = async () => {
+    try {
+      const [accRes, statRes] = await Promise.all([
+        fetch(`${SCCU_API}/accounts`).then(r => r.json()),
+        fetch(`${SCCU_API}/stats`).then(r => r.json()),
+      ]);
+      setAccounts(accRes.accounts || []);
+      setStats(statRes);
+    } catch {}
+  };
 
   const login = async () => {
     setLoading(true);
     setError("");
     try {
-      const r = await fetch(`${API}/my/logins/direct`, {
+      const r = await fetch(`${SCCU_API}/auth/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `DirectLogin username="${username}",password="${password}",consumer_key="${CONSUMER_KEY}"`,
-        },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
       });
       const d = await r.json();
-      if (d.token) {
+      if (r.ok) {
         setToken(d.token);
         setLoggedIn(true);
-        fetchAccounts(d.token);
+        fetchData();
       } else {
-        setError(d.message || "Login failed");
+        setError(d.detail || "Login failed");
       }
     } catch {
-      setError("Cannot reach SCCU API at " + API);
+      setError("Cannot reach SCCU API at " + SCCU_API);
     }
     setLoading(false);
   };
 
-  const fetchAccounts = async (tk) => {
-    try {
-      const r = await fetch(`${API}/obp/v5.1.0/banks/${BANK_ID}/accounts/private`, {
-        headers: { "Authorization": `DirectLogin token="${tk}"` },
-      });
-      const d = await r.json();
-      setLiveAccounts(d.accounts || []);
-    } catch {}
-  };
-
-  const s = {
-    page: { fontFamily: "system-ui, sans-serif", fontSize: 14, color: "#1a1a1a", padding: "0 0 40px" },
-    header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0", borderBottom: "1px solid #e8e8e8", marginBottom: 20 },
-    logo: { width: 40, height: 40, borderRadius: "50%", background: "#0F6E56", display: "flex", alignItems: "center", justifyContent: "center" },
-    tabs: { display: "flex", gap: 2, borderBottom: "1px solid #e8e8e8", marginBottom: 24 },
-    grid4: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 },
-    grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 },
-    metric: { background: "#f7f7f5", borderRadius: 10, padding: "1rem" },
-    card: { background: "#fff", border: "1px solid #e8e8e8", borderRadius: 12, padding: "1rem 1.25rem" },
-    badge: (type) => ({ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: TYPE_COLORS[type]?.bg, color: TYPE_COLORS[type]?.text }),
-    avatar: { width: 40, height: 40, borderRadius: "50%", background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 500, color: "#185FA5", flexShrink: 0 },
-    btn: { padding: "8px 16px", fontSize: 13, border: "1px solid #e8e8e8", borderRadius: 8, background: "#fff", cursor: "pointer" },
-    input: { width: "100%", padding: "10px 12px", fontSize: 14, border: "1px solid #e8e8e8", borderRadius: 8, boxSizing: "border-box", outline: "none" },
-  };
+  const totalAssets = accounts.reduce((s, a) => s + (a.balance || 0), 0);
 
   if (!loggedIn) {
     return (
@@ -122,7 +120,7 @@ export default function SCCUDashboard() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, padding: "8px 12px", borderRadius: 8, background: "#f7f7f5" }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: apiStatus === "live" ? "#1D9E75" : apiStatus === "offline" ? "#E24B4A" : "#EF9F27" }}/>
             <span style={{ fontSize: 12, color: "#888" }}>
-              {apiStatus === "live" ? `OBP ${obpVersion} — live` : apiStatus === "offline" ? "API offline — start containers first" : "Checking API..."}
+              {apiStatus === "live" ? "SCCU API live — FastAPI + PostgreSQL" : apiStatus === "offline" ? "API offline — run: uvicorn api:app --port 3001" : "Checking API..."}
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -146,7 +144,7 @@ export default function SCCUDashboard() {
   }
 
   return (
-    <div style={{ ...s.page, maxWidth: 1100, margin: "0 auto", padding: "0 24px 40px" }}>
+    <div style={s.page}>
       <div style={s.header}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={s.logo}>
@@ -162,7 +160,7 @@ export default function SCCUDashboard() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#1D9E75" }}/>
-            <span style={{ fontSize: 11, color: "#888" }}>Live · {obpVersion}</span>
+            <span style={{ fontSize: 11, color: "#888" }}>Live · FastAPI + PostgreSQL</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: "#185FA5" }}>NY</div>
@@ -185,32 +183,36 @@ export default function SCCUDashboard() {
         <div>
           <div style={s.grid4}>
             {[
-              { label: "Total assets", value: `BZD ${fmt(totalAssets)}`, sub: "7 share savings accounts" },
-              { label: "Members", value: "7", sub: "All active — founding group" },
-              { label: "Live accounts", value: liveAccounts.length || "7", sub: "Via OBP API" },
-              { label: "API status", value: "Live", sub: `${obpVersion} · mapped` },
+              { label: "Total assets",   value: `BZD ${fmt(totalAssets)}`,           sub: `${accounts.length} share savings accounts` },
+              { label: "Members",        value: String(accounts.length),              sub: "All active — founding group" },
+              { label: "Avg balance",    value: `BZD ${fmt(totalAssets / (accounts.length || 1))}`, sub: "Per member account" },
+              { label: "Data source",    value: "Live",                               sub: "FastAPI · PostgreSQL 15" },
             ].map((c, i) => (
               <div key={i} style={s.metric}>
                 <p style={{ margin: "0 0 6px", fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: ".05em" }}>{c.label}</p>
-                <p style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 600 }}>{c.value}</p>
+                <p style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 600 }}>{c.value}</p>
                 <p style={{ margin: 0, fontSize: 11, color: "#888" }}>{c.sub}</p>
               </div>
             ))}
           </div>
           <div style={s.grid2}>
             <div style={s.card}>
-              <p style={{ fontWeight: 600, marginBottom: 16 }}>Member balances</p>
-              {MEMBERS.map(m => (
-                <div key={m.id} style={{ marginBottom: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                    <span style={{ fontSize: 13 }}>{m.name}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>BZD {fmt(m.balance)}</span>
+              <p style={{ fontWeight: 600, marginBottom: 16 }}>Member balances — live from DB</p>
+              {accounts.map(a => {
+                const pct = totalAssets > 0 ? Math.round((a.balance / totalAssets) * 100) : 0;
+                const info = TYPE_MAP[a.owner_email] || {};
+                return (
+                  <div key={a.id} style={{ marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                      <span style={{ fontSize: 13 }}>{a.label.replace(" Share Savings","").replace(" Account","").replace(" Business","").replace(" Agricultural","").replace(" Diaspora","").replace(" Trade Member","").replace(" Community","").replace(" Rural","")}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>BZD {fmt(a.balance)}</span>
+                    </div>
+                    <div style={{ height: 5, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct}%`, background: "#1D9E75", borderRadius: 3 }}/>
+                    </div>
                   </div>
-                  <div style={{ height: 5, background: "#f0f0f0", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.round(m.balance / totalAssets * 100)}%`, background: "#1D9E75", borderRadius: 3 }}/>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div style={s.card}>
               <p style={{ fontWeight: 600, marginBottom: 16 }}>Recent transactions</p>
@@ -240,10 +242,14 @@ export default function SCCUDashboard() {
               <button onClick={() => setSelectedMember(null)} style={{ ...s.btn, marginBottom: 20 }}>← Back</button>
               <div style={s.card}>
                 <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-                  <div style={{ ...s.avatar, width: 56, height: 56, fontSize: 18 }}>{selectedMember.initials}</div>
+                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 600, color: "#185FA5" }}>
+                    {TYPE_MAP[selectedMember.owner_email]?.initials || "??"}
+                  </div>
                   <div>
-                    <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 600 }}>{selectedMember.name}</h2>
-                    <span style={s.badge(selectedMember.type)}>{selectedMember.type} member</span>
+                    <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 600 }}>{selectedMember.label}</h2>
+                    <span style={s.badge(TYPE_MAP[selectedMember.owner_email]?.type)}>
+                      {TYPE_MAP[selectedMember.owner_email]?.type || "Member"}
+                    </span>
                   </div>
                 </div>
                 <div style={{ ...s.grid2, marginBottom: 24 }}>
@@ -258,9 +264,10 @@ export default function SCCUDashboard() {
                 </div>
                 <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
                   {[
-                    ["Email", selectedMember.email],
-                    ["Account type", "Share Savings — BZD"],
-                    ["Currency", "BZD (USD 2:1 peg)"],
+                    ["Owner", selectedMember.owner_name],
+                    ["Email", selectedMember.owner_email],
+                    ["Currency", `${selectedMember.currency} (USD 2:1 peg)`],
+                    ["Type", selectedMember.type],
                     ["Status", "Active — validated"],
                   ].map(([k, v]) => (
                     <tr key={k} style={{ borderBottom: "1px solid #f0f0f0" }}>
@@ -273,22 +280,28 @@ export default function SCCUDashboard() {
             </div>
           ) : (
             <div>
-              <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>7 founding members · Click to view details</p>
+              <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>{accounts.length} founding members · Live from PostgreSQL · Click to view details</p>
               <div style={{ border: "1px solid #e8e8e8", borderRadius: 12, overflow: "hidden" }}>
-                {MEMBERS.map((m, i) => (
-                  <div key={m.id} onClick={() => setSelectedMember(m)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px", cursor: "pointer", background: "#fff", borderBottom: i < MEMBERS.length - 1 ? "1px solid #f0f0f0" : "none", transition: "background .15s" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#f7f7f5"}
-                    onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
-                    <div style={s.avatar}>{m.initials}</div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ margin: "0 0 3px", fontWeight: 500, fontSize: 14 }}>{m.name}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{m.email}</p>
+                {accounts.map((a, i) => {
+                  const info = TYPE_MAP[a.owner_email] || {};
+                  return (
+                    <div key={a.id} onClick={() => setSelectedMember(a)}
+                      style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px", cursor: "pointer", background: "#fff", borderBottom: i < accounts.length - 1 ? "1px solid #f0f0f0" : "none", transition: "background .15s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#f7f7f5"}
+                      onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: "#185FA5", flexShrink: 0 }}>
+                        {info.initials || "??"}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: "0 0 3px", fontWeight: 500, fontSize: 14 }}>{a.owner_name}</p>
+                        <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{a.owner_email}</p>
+                      </div>
+                      <span style={s.badge(info.type)}>{info.type || "Member"}</span>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: 14, minWidth: 110, textAlign: "right" }}>BZD {fmt(a.balance)}</p>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </div>
-                    <span style={s.badge(m.type)}>{m.type}</span>
-                    <p style={{ margin: 0, fontWeight: 600, fontSize: 14, minWidth: 110, textAlign: "right" }}>BZD {fmt(m.balance)}</p>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -298,29 +311,32 @@ export default function SCCUDashboard() {
       {tab === "Accounts" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <p style={{ margin: 0, color: "#888", fontSize: 13 }}>{liveAccounts.length > 0 ? `${liveAccounts.length} accounts from OBP API` : "7 accounts — local data"}</p>
-            <button onClick={() => fetchAccounts(token)} style={s.btn}>Refresh from API</button>
+            <p style={{ margin: 0, color: "#888", fontSize: 13 }}>{accounts.length} accounts — live from PostgreSQL 15</p>
+            <button onClick={fetchData} style={s.btn}>Refresh</button>
           </div>
           <div style={{ border: "1px solid #e8e8e8", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f7f7f5" }}>
-                  {["Member", "Account ID", "Type", "Balance (BZD)", "Currency", "Status"].map(h => (
+                  {["Member", "Email", "Account ID", "Type", "Balance (BZD)", "Status"].map(h => (
                     <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontWeight: 500, fontSize: 11, color: "#888", borderBottom: "1px solid #e8e8e8", textTransform: "uppercase", letterSpacing: ".05em" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {MEMBERS.map((m, i) => (
-                  <tr key={m.id} style={{ borderBottom: i < MEMBERS.length - 1 ? "1px solid #f0f0f0" : "none" }}>
-                    <td style={{ padding: "14px", fontWeight: 500 }}>{m.name}</td>
-                    <td style={{ padding: "14px", fontFamily: "monospace", fontSize: 11, color: "#888" }}>{m.id}</td>
-                    <td style={{ padding: "14px" }}><span style={s.badge(m.type)}>{m.type}</span></td>
-                    <td style={{ padding: "14px", fontWeight: 600 }}>{fmt(m.balance)}</td>
-                    <td style={{ padding: "14px", color: "#888" }}>BZD</td>
-                    <td style={{ padding: "14px" }}><span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "#EAF3DE", color: "#3B6D11" }}>Active</span></td>
-                  </tr>
-                ))}
+                {accounts.map((a, i) => {
+                  const info = TYPE_MAP[a.owner_email] || {};
+                  return (
+                    <tr key={a.id} style={{ borderBottom: i < accounts.length - 1 ? "1px solid #f0f0f0" : "none" }}>
+                      <td style={{ padding: "14px", fontWeight: 500 }}>{a.owner_name}</td>
+                      <td style={{ padding: "14px", fontSize: 12, color: "#888" }}>{a.owner_email}</td>
+                      <td style={{ padding: "14px", fontFamily: "monospace", fontSize: 11, color: "#888" }}>{a.id}</td>
+                      <td style={{ padding: "14px" }}><span style={s.badge(info.type)}>{info.type || "Member"}</span></td>
+                      <td style={{ padding: "14px", fontWeight: 600 }}>{fmt(a.balance)}</td>
+                      <td style={{ padding: "14px" }}><span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "#EAF3DE", color: "#3B6D11" }}>Active</span></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -337,7 +353,7 @@ export default function SCCUDashboard() {
             { title: "AML/CFT status", items: [["MLTPA Cap 104 — framework pending", false], ["FIU Belize — registration required", false], ["CDD programme — in development", false], ["STR filing system — planned", false]] },
             { title: "CBB registration", items: [["Credit Unions Act Cap 314", false], ["Fit & proper — officers to document", false], ["IT risk assessment — architecture ready", true], ["CBB submission — Phase 0", false]] },
             { title: "NPS payments licence", items: [["NPS Act Cap 266:01", false], ["APSSS 2.0 integration — planned", false], ["BZD:USD 2:1 hardcoded in system", true], ["Payment processor — TBD", false]] },
-            { title: "Data & privacy", items: [["Member data on RHEL 9 server", true], ["PostgreSQL — persistent storage", true], ["No data leaves Belize", true], ["OBP audit metrics — live", true]] },
+            { title: "Data & privacy", items: [["Member data on RHEL 9 + OptiPlex", true], ["PostgreSQL — persistent storage", true], ["No data leaves Belize", true], ["FastAPI audit endpoints — live", true]] },
           ].map((c, i) => (
             <div key={i} style={{ ...s.card, marginBottom: 0 }}>
               <p style={{ fontWeight: 600, marginBottom: 14 }}>{c.title}</p>
@@ -358,16 +374,16 @@ export default function SCCUDashboard() {
             <p style={{ fontWeight: 600, marginBottom: 16 }}>System configuration</p>
             <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
               {[
-                ["OBP API host", "http://127.0.0.1:8080"],
+                ["SCCU API", "http://127.0.0.1:3001 (FastAPI)"],
+                ["OBP API", "http://127.0.0.1:8080 (OBP v5.1.0)"],
                 ["Bank ID", "93dba562-eb4f-4a69-949f-0fe9bb6a5644"],
                 ["Bank routing", "bz.sccu"],
-                ["Consumer key", "sccu-key-2026"],
                 ["Admin user", "nyanavila_20"],
                 ["Database", "PostgreSQL 15 — localhost:5432/sccu"],
                 ["Cache", "Redis 7 — localhost:6379"],
-                ["Runtime", "Podman rootless — RHEL 9"],
-                ["Network mode", "--network host"],
+                ["Runtime", "Podman rootless — RHEL 9 — OptiPlex 7050"],
                 ["Currency", "BZD — USD 2:1 peg"],
+                ["GitHub", "github.com/nyanavila/sccu-platform"],
               ].map(([k, v]) => (
                 <tr key={k} style={{ borderBottom: "1px solid #f0f0f0" }}>
                   <td style={{ padding: "10px 0", color: "#888", width: 200 }}>{k}</td>
@@ -379,10 +395,11 @@ export default function SCCUDashboard() {
           <div style={s.card}>
             <p style={{ fontWeight: 600, marginBottom: 16 }}>Quick commands</p>
             {[
-              ["Start SCCU containers", "podman run --network host --env-file ~/sccu/obp.env docker.io/openbankproject/obp-api"],
-              ["Get fresh token", "source ~/sccu/auth.sh"],
-              ["Check container status", "podman ps --format '{{.Names}} {{.Status}}'"],
-              ["Watch OBP logs", "podman logs -f sccu-core 2>&1 | grep -v keepalive"],
+              ["Start SCCU API", "cd ~/sccu && uvicorn api:app --host 0.0.0.0 --port 3001 --reload &"],
+              ["Start OBP core banking", "podman run --network host --env-file ~/sccu/obp.env docker.io/openbankproject/obp-api"],
+              ["Get fresh OBP token", "source ~/sccu/auth.sh"],
+              ["Check all containers", "podman ps --format '{{.Names}} {{.Status}}'"],
+              ["Save to GitHub", "cd ~/sccu && git add -A && git commit -m 'update' && git push"],
             ].map(([label, cmd]) => (
               <div key={label} style={{ marginBottom: 16 }}>
                 <p style={{ fontSize: 12, color: "#888", marginBottom: 6 }}>{label}</p>
@@ -390,7 +407,7 @@ export default function SCCUDashboard() {
               </div>
             ))}
           </div>
-          <button onClick={() => { setLoggedIn(false); setToken(""); setLiveAccounts([]); }} style={s.btn}>Sign out</button>
+          <button onClick={() => { setLoggedIn(false); setToken(""); setAccounts([]); setStats(null); }} style={s.btn}>Sign out</button>
         </div>
       )}
     </div>
