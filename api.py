@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 import psycopg2.extras
@@ -13,7 +13,15 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_ngrok_header(request, call_next):
+    response = await call_next(request)
+    response.headers["ngrok-skip-browser-warning"] = "true"
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
 
 DB = {
     "host": "localhost",
@@ -450,3 +458,193 @@ def get_transactions(account_id: str):
     rows = cur.fetchall()
     conn.close()
     return {"account_id": account_id, "transactions": [dict(r) for r in rows]}
+
+# ═══════════════════════════════════════════════════════════
+# TELLER MODULE
+# ═══════════════════════════════════════════════════════════
+import secrets
+from datetime import datetime
+
+TELLER_SESSIONS = {}
+
+def teller_from_token(token: str):
+    s = TELLER_SESSIONS.get(token)
+    if not s:
+        raise HTTPException(status_code=401, detail="Invalid or expired teller session")
+    return s
+
+def gen_receipt(teller_id: int) -> str:
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    rand = secrets.token_hex(3).upper()
+    return f"RCP-{teller_id:02d}-{ts}-{rand}"
+
+@app.post("/teller/login")
+def teller_login(body: dict):
+    username = body.get("username", "").strip()
+    password = body.get("password", "").strip()
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password required")
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT id, username, full_name, branch, active, password_hash FROM sccu_tellers WHERE username = %s", (username,))
+    teller = cur.fetchone()
+    conn.close()
+    if not teller:
+        raise HTTPException(status_code=401, detail="Teller not found")
+    if not teller["active"]:
+        raise HTTPException(status_code=403, detail="Teller account is inactive")
+    if teller["password_hash"] != password:
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    token = secrets.token_hex(32)
+    TELLER_SESSIONS[token] = {"teller_id": teller["id"], "username": teller["username"], "full_name": teller["full_name"], "branch": teller["branch"], "opened_at": datetime.now().isoformat(), "session_id": None, "float": 0.0}
+    return {"token": token, "teller_id": teller["id"], "full_name": teller["full_name"], "branch": teller["branch"]}
+
+@app.post("/teller/session/open")
+def teller_open_session(body: dict, authorization: str = Header(None)):
+    token = (authorization or "").replace("Bearer ", "").strip()
+    sess = teller_from_token(token)
+    opening_float = float(body.get("opening_float", 0))
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("INSERT INTO bp_teller_sessions (teller_id, opening_float, status) VALUES (%s, %s, 'open') RETURNING id, opened_at", (sess["teller_id"], opening_float))
+    row = cur.fetchone()
+    conn.commit()
+    conn.close()
+    TELLER_SESSIONS[token]["session_id"] = row["id"]
+    TELLER_SESSIONS[token]["float"] = opening_float
+    return {"session_id": row["id"], "teller_id": sess["teller_id"], "full_name": sess["full_name"], "branch": sess["branch"], "opening_float": opening_float, "opened_at": row["opened_at"].isoformat(), "status": "open"}
+
+@app.post("/teller/deposit")
+def teller_deposit(body: dict, authorization: str = Header(None)):
+    token = (authorization or "").replace("Bearer ", "").strip()
+    sess = teller_from_token(token)
+    account_id = (body.get("account_id") or "").strip()
+    amount = float(body.get("amount", 0))
+    description = body.get("description", "Cash deposit").strip() or "Cash deposit"
+    source = body.get("source", "Cash").strip() or "Cash"
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id is required")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT accountbalance, accountlabel FROM mappedbankaccount WHERE theaccountid = %s", (account_id,))
+    account = cur.fetchone()
+    if not account:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Account not found")
+    cur.execute("UPDATE mappedbankaccount SET accountbalance = accountbalance + %s, accountlastupdate = NOW() WHERE theaccountid = %s", (amount, account_id))
+    txn_id = f"dep-{account_id[:8]}-{int(datetime.now().timestamp())}"
+    full_desc = f"{source} — {description}" if description != "Cash deposit" else source
+    cur.execute("INSERT INTO sccu_transactions (txn_id, from_account, to_account, amount, currency, txn_type, description, status) VALUES (%s, 'TELLER', %s, %s, 'BZD', 'DEPOSIT', %s, 'completed')", (txn_id, account_id, amount, full_desc))
+    receipt_no = gen_receipt(sess["teller_id"])
+    session_id = sess.get("session_id")
+    if session_id:
+        cur.execute("INSERT INTO bp_teller_transactions (session_id, teller_id, account_id, txn_type, amount, currency, description, receipt_no) VALUES (%s, %s, %s, 'DEPOSIT', %s, 'BZD', %s, %s)", (session_id, sess["teller_id"], account_id, amount, full_desc, receipt_no))
+        cur.execute("UPDATE bp_teller_sessions SET total_deposits = total_deposits + %s, transaction_count = transaction_count + 1 WHERE id = %s", (amount, session_id))
+    conn.commit()
+    cur.execute("SELECT accountbalance FROM mappedbankaccount WHERE theaccountid = %s", (account_id,))
+    new_balance = cur.fetchone()["accountbalance"]
+    conn.close()
+    return {"success": True, "receipt_no": receipt_no, "transaction_id": txn_id, "account_id": account_id, "account_label": account["accountlabel"], "amount": amount, "new_balance": float(new_balance), "currency": "BZD", "description": full_desc, "teller": sess["full_name"], "branch": sess["branch"], "timestamp": datetime.now().isoformat()}
+
+@app.post("/teller/withdrawal")
+def teller_withdrawal(body: dict, authorization: str = Header(None)):
+    token = (authorization or "").replace("Bearer ", "").strip()
+    sess = teller_from_token(token)
+    account_id = (body.get("account_id") or "").strip()
+    amount = float(body.get("amount", 0))
+    description = body.get("description", "Cash withdrawal").strip() or "Cash withdrawal"
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id is required")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT accountbalance, accountlabel FROM mappedbankaccount WHERE theaccountid = %s", (account_id,))
+    account = cur.fetchone()
+    if not account:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Account not found")
+    if float(account["accountbalance"]) < amount:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Insufficient funds. Balance: BZD {account['accountbalance']:.2f}")
+    cur.execute("UPDATE mappedbankaccount SET accountbalance = accountbalance - %s, accountlastupdate = NOW() WHERE theaccountid = %s", (amount, account_id))
+    txn_id = f"wdl-{account_id[:8]}-{int(datetime.now().timestamp())}"
+    cur.execute("INSERT INTO sccu_transactions (txn_id, from_account, to_account, amount, currency, txn_type, description, status) VALUES (%s, %s, 'TELLER', %s, 'BZD', 'WITHDRAWAL', %s, 'completed')", (txn_id, account_id, amount, description))
+    receipt_no = gen_receipt(sess["teller_id"])
+    session_id = sess.get("session_id")
+    if session_id:
+        cur.execute("INSERT INTO bp_teller_transactions (session_id, teller_id, account_id, txn_type, amount, currency, description, receipt_no) VALUES (%s, %s, %s, 'WITHDRAWAL', %s, 'BZD', %s, %s)", (session_id, sess["teller_id"], account_id, amount, description, receipt_no))
+        cur.execute("UPDATE bp_teller_sessions SET total_withdrawals = total_withdrawals + %s, transaction_count = transaction_count + 1 WHERE id = %s", (amount, session_id))
+    conn.commit()
+    cur.execute("SELECT accountbalance FROM mappedbankaccount WHERE theaccountid = %s", (account_id,))
+    new_balance = cur.fetchone()["accountbalance"]
+    conn.close()
+    return {"success": True, "receipt_no": receipt_no, "transaction_id": txn_id, "account_id": account_id, "account_label": account["accountlabel"], "amount": amount, "new_balance": float(new_balance), "currency": "BZD", "description": description, "teller": sess["full_name"], "branch": sess["branch"], "timestamp": datetime.now().isoformat()}
+
+@app.get("/teller/member-lookup")
+def teller_member_lookup(q: str = "", authorization: str = Header(None)):
+    token = (authorization or "").replace("Bearer ", "").strip()
+    teller_from_token(token)
+    if not q or len(q) < 2:
+        raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("""
+        SELECT a.theaccountid AS account_id, a.accountlabel AS label, a.accountbalance AS balance, a.accountcurrency AS currency, r.name_ AS owner_name, au.email AS owner_email
+        FROM mappedbankaccount a
+        JOIN mapperaccountholders h ON h.accountpermalink = a.theaccountid
+        JOIN resourceuser r ON r.id = h.user_c
+        JOIN authuser au ON au.username = r.name_
+        WHERE a.bank != 'obp1' AND a.kind != 'SETTLEMENT'
+        AND (LOWER(r.name_) LIKE LOWER(%s) OR LOWER(au.email) LIKE LOWER(%s) OR LOWER(a.theaccountid) LIKE LOWER(%s) OR LOWER(a.accountlabel) LIKE LOWER(%s))
+        ORDER BY r.name_ LIMIT 10
+    """, (f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%"))
+    rows = cur.fetchall()
+    conn.close()
+    return {"results": [dict(r) for r in rows]}
+
+@app.get("/teller/session/summary")
+def teller_session_summary(authorization: str = Header(None)):
+    token = (authorization or "").replace("Bearer ", "").strip()
+    sess = teller_from_token(token)
+    session_id = sess.get("session_id")
+    if not session_id:
+        return {"session_id": None, "teller": sess["full_name"], "branch": sess["branch"], "opened_at": sess["opened_at"], "status": "no_session", "opening_float": 0, "total_deposits": 0, "total_withdrawals": 0, "transaction_count": 0, "transactions": []}
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT id, teller_id, opened_at, closing_float, opening_float, total_deposits, total_withdrawals, transaction_count, status FROM bp_teller_sessions WHERE id = %s", (session_id,))
+    session = cur.fetchone()
+    cur.execute("""
+        SELECT bt.receipt_no, bt.txn_type, bt.amount, bt.currency, bt.description, bt.created_at, a.accountlabel AS account_label
+        FROM bp_teller_transactions bt
+        JOIN mappedbankaccount a ON a.theaccountid = bt.account_id
+        WHERE bt.session_id = %s ORDER BY bt.created_at DESC
+    """, (session_id,))
+    transactions = cur.fetchall()
+    conn.close()
+    return {**dict(session), "teller": sess["full_name"], "branch": sess["branch"], "transactions": [dict(t) for t in transactions]}
+
+@app.post("/teller/session/close")
+def teller_close_session(body: dict, authorization: str = Header(None)):
+    token = (authorization or "").replace("Bearer ", "").strip()
+    sess = teller_from_token(token)
+    session_id = sess.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="No open session to close")
+    closing_float = float(body.get("closing_float", 0))
+    conn = db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("UPDATE bp_teller_sessions SET closed_at = NOW(), closing_float = %s, status = 'closed' WHERE id = %s RETURNING *", (closing_float, session_id))
+    session = cur.fetchone()
+    conn.commit()
+    conn.close()
+    TELLER_SESSIONS[token]["session_id"] = None
+    return {**dict(session), "teller": sess["full_name"], "variance": closing_float - float(session["opening_float"])}
+
+@app.post("/teller/logout")
+def teller_logout(authorization: str = Header(None)):
+    token = (authorization or "").replace("Bearer ", "").strip()
+    TELLER_SESSIONS.pop(token, None)
+    return {"success": True}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-const SCCU_API = "http://127.0.0.1:3001";
+import API from "./config.js";
+const SCCU_API = API;
 
 const MEMBER_TYPES = ["Community", "Business", "Agricultural", "Diaspora", "Trade"];
 

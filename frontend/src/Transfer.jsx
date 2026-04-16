@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 
-const SCCU_API = "http://127.0.0.1:3001";
+import API from "./config.js";
+const SCCU_API = API;
 const fmt = (n) => new Intl.NumberFormat("en-BZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 export default function Transfer({ account, onClose, onSuccess }) {

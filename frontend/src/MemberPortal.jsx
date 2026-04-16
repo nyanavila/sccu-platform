@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import Transfer from "./Transfer.jsx";
 
-const SCCU_API = "http://127.0.0.1:3001";
+import API from "./config.js";
+const SCCU_API = API;
 const fmt = (n) => new Intl.NumberFormat("en-BZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 const MEMBER_TRANSACTIONS = {
@@ -78,6 +79,8 @@ export default function MemberPortal() {
   const [apiStatus, setApiStatus] = useState("checking");
   const [activeTab, setActiveTab] = useState("overview");
   const [showTransfer, setShowTransfer] = useState(false);
+  const [showReceive, setShowReceive] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
   const [liveTransactions, setLiveTransactions] = useState([]);
 
   useEffect(() => {
@@ -212,6 +215,68 @@ export default function MemberPortal() {
 
   return (
     <>
+      {showReceive && account && (
+        <div style={{ position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem" }}>
+          <div style={{ background:"#fff",borderRadius:20,padding:"2rem",width:"100%",maxWidth:460 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24 }}>
+              <div>
+                <h2 style={{ margin:"0 0 4px",fontSize:20,fontWeight:700 }}>Receive money</h2>
+                <p style={{ margin:0,fontSize:13,color:"#888" }}>Share your account details</p>
+              </div>
+              <button onClick={() => setShowReceive(false)} style={{ width:32,height:32,borderRadius:"50%",border:"1px solid #e8e8e8",background:"#fff",cursor:"pointer",fontSize:18 }}>×</button>
+            </div>
+            <div style={{ background:"#f7f7f5",borderRadius:12,padding:"1.25rem",marginBottom:20 }}>
+              {[
+                ["Full name", MEMBER_NAMES[email]],
+                ["Account ID", account.id],
+                ["Account number", account.number || "SCCU-2026"],
+                ["Institution", "Sensu Community Credit Union"],
+                ["Routing", "bz.sccu"],
+                ["Currency", "BZD — Belize Dollar"],
+              ].map(([k,v]) => (
+                <div key={k} style={{ display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #e8e8e8",fontSize:13 }}>
+                  <span style={{ color:"#888" }}>{k}</span>
+                  <span style={{ fontWeight:500,fontFamily:k.includes("Account")||k==="Routing"?"monospace":"inherit",fontSize:k.includes("Account")||k==="Routing"?11:13 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding:"12px 14px",background:"#E6F1FB",borderRadius:8,marginBottom:20,fontSize:13,color:"#185FA5" }}>
+              Share these details with anyone who wants to send you money via SCCU.
+            </div>
+            <button onClick={() => setShowReceive(false)} style={{ width:"100%",padding:"13px",fontSize:14,fontWeight:600,border:"none",borderRadius:10,cursor:"pointer",background:"#0F6E56",color:"#fff" }}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {showSupport && (
+        <div style={{ position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem" }}>
+          <div style={{ background:"#fff",borderRadius:20,padding:"2rem",width:"100%",maxWidth:460 }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24 }}>
+              <div>
+                <h2 style={{ margin:"0 0 4px",fontSize:20,fontWeight:700 }}>Support</h2>
+                <p style={{ margin:0,fontSize:13,color:"#888" }}>Sensu Community Credit Union</p>
+              </div>
+              <button onClick={() => setShowSupport(false)} style={{ width:32,height:32,borderRadius:"50%",border:"1px solid #e8e8e8",background:"#fff",cursor:"pointer",fontSize:18 }}>×</button>
+            </div>
+            <div style={{ display:"flex",flexDirection:"column",gap:12,marginBottom:20 }}>
+              {[
+                ["Phone", "+501 XXX-XXXX", "Call us during business hours"],
+                ["Email", "support@sccu.bz", "We reply within 24 hours"],
+                ["WhatsApp", "+501 XXX-XXXX", "Message us anytime"],
+                ["Branch", "Belize City — Main Branch", "Mon-Fri 8am-4pm"],
+              ].map(([type,val,desc]) => (
+                <div key={type} style={{ padding:"14px",background:"#f7f7f5",borderRadius:10 }}>
+                  <p style={{ margin:"0 0 2px",fontWeight:600,fontSize:13 }}>{type}</p>
+                  <p style={{ margin:"0 0 2px",fontSize:14,color:"#0F6E56" }}>{val}</p>
+                  <p style={{ margin:0,fontSize:12,color:"#888" }}>{desc}</p>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowSupport(false)} style={{ width:"100%",padding:"13px",fontSize:14,fontWeight:600,border:"1px solid #e8e8e8",borderRadius:10,cursor:"pointer",background:"#fff" }}>Close</button>
+          </div>
+        </div>
+      )}
+
       {showTransfer && account && (
         <Transfer
           account={account}
