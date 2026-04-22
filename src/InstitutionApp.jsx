@@ -88,6 +88,7 @@ async function gwPost(path, body) {
 //  PUBLIC SITE
 // ══════════════════════════════════════════════════════════════
 function PublicSite({ onNav }) {
+  // ChatWidget rendered from parent
   const [apiOk, setApiOk]         = useState(null);
   const [loanOpen, setLoanOpen]   = useState(false);
   const [ctOpen,   setCtOpen]     = useState(false);
@@ -1029,11 +1030,145 @@ function AdminPortal({ onBack }) {
 // ══════════════════════════════════════════════════════════════
 //  ROOT ROUTER
 // ══════════════════════════════════════════════════════════════
+
+// ── Chat Widget (SCCU/TACU) ────────────────────────────────────────
+const QUICK_PROMPTS_CU = [
+  "What savings accounts do you offer?",
+  "How do I apply for a loan?",
+  "How do I open an account?",
+  "What is the BelizePay network?",
+];
+
+function ChatWidgetCU({ session }) {
+  const [open,setOpen]     = useState(false);
+  const [msgs,setMsgs]     = useState([{role:"ai",text:`Hello! I'm the ${SH.toUpperCase()} Assistant. I can help with accounts, loans, transfers, and more. What can I help you with?`}]);
+  const [input,setInput]   = useState("");
+  const [loading,setLoading] = useState(false);
+  const [sessId]           = useState(()=>Math.random().toString(36).slice(2));
+  const [pulsed,setPulsed] = useState(true);
+  const bottomRef          = useRef(null);
+  const primary = C?.primary || CFG?.COLORS?.primary || "#1A5FA8";
+  const white   = C?.white   || "#FFFFFF";
+  const border  = C?.border  || "#E8E5DE";
+  const offWhite = C?.cream  || C?.sandLight || "#F9F8F5";
+  const muted   = C?.muted   || "#6B6B6B";
+  const ink     = C?.ink     || "#1A1A2E";
+
+  useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,loading]);
+  useEffect(()=>{if(open) setPulsed(false);},[open]);
+
+  const send=async(text)=>{
+    const msg=(text||input).trim();
+    if(!msg||loading) return;
+    setInput("");
+    setMsgs(m=>[...m,{role:"user",text:msg}]);
+    setLoading(true);
+    try{
+      const headers={"Content-Type":"application/json"};
+      if(session?.token) headers.Authorization=`Bearer ${session.token}`;
+      const r=await fetch(`${GW}/ai/chat`,{
+        method:"POST",headers,
+        body:JSON.stringify({message:msg,institution:SH,domain:"customer",session_id:sessId}),
+      });
+      const data=await r.json();
+      setMsgs(m=>[...m,{role:"ai",text:data.response||data.detail||"Sorry, I couldn't get a response. Please try again."}]);
+    }catch{
+      setMsgs(m=>[...m,{role:"ai",text:"Connection error. Please try again."}]);
+    }finally{setLoading(false);}
+  };
+
+  const fmt2=t=>t.replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1").replace(/#{1,3}\s/g,"").trim();
+
+  const fabStyle={position:"fixed",bottom:24,right:24,width:52,height:52,background:primary,borderRadius:"50%",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,boxShadow:`0 4px 16px ${primary}55`,transition:"transform .2s"};
+  const panelStyle={position:"fixed",bottom:86,right:24,width:340,height:500,background:white,border:`1px solid ${border}`,borderRadius:12,display:"flex",flexDirection:"column",zIndex:200,boxShadow:"0 20px 60px rgba(0,0,0,.12)",animation:"slideUp2 .25s ease both"};
+
+  return(
+    <>
+      <button style={fabStyle} onClick={()=>setOpen(o=>!o)} title={`${SH.toUpperCase()} AI Assistant`}
+        onMouseEnter={e=>e.currentTarget.style.transform="scale(1.08)"}
+        onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+        {open?(
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={white} strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        ):(
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <circle cx="9" cy="10" r="1" fill={white}/><circle cx="12" cy="10" r="1" fill={white}/><circle cx="15" cy="10" r="1" fill={white}/>
+          </svg>
+        )}
+      </button>
+      {open&&(
+        <div style={panelStyle}>
+          <div style={{background:primary,borderRadius:"12px 12px 0 0",padding:"13px 16px",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:30,height:30,background:"rgba(255,255,255,.2)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <span style={{color:white,fontWeight:700,fontSize:".875rem"}}>{SH[0].toUpperCase()}</span>
+            </div>
+            <div style={{flex:1}}>
+              <div style={{color:white,fontWeight:600,fontSize:".875rem"}}>{CFG.FULL_NAME?.split(" ").slice(0,3).join(" ") || SH.toUpperCase()} Assistant</div>
+              <div style={{color:"rgba(255,255,255,.7)",fontSize:".72rem"}}>{session?"Member session active":"Ask me anything"}</div>
+            </div>
+            <div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/>
+          </div>
+          <div style={{background:"#FFF8E6",borderBottom:`1px solid ${border}`,padding:"6px 14px",fontSize:".72rem",color:"#8B6914"}}>
+            AI assistant — not a financial adviser. Contact {SH.toUpperCase()} for account decisions.
+          </div>
+          <div style={{flex:1,overflowY:"auto",padding:"14px",display:"flex",flexDirection:"column"}}>
+            {msgs.map((m,i)=>(
+              <div key={i} style={{maxWidth:"85%",marginBottom:10,alignSelf:m.role==="user"?"flex-end":"flex-start"}}>
+                <div style={{padding:"9px 13px",borderRadius:11,fontSize:".875rem",lineHeight:1.55,
+                  background:m.role==="user"?primary:offWhite,color:m.role==="user"?white:ink,
+                  borderBottomRightRadius:m.role==="user"?3:11,borderBottomLeftRadius:m.role==="ai"?3:11,
+                  border:m.role==="ai"?`1px solid ${border}`:"none"}}>
+                  {fmt2(m.text).split("\n").map((line,j,arr)=><span key={j}>{line}{j<arr.length-1&&<br/>}</span>)}
+                </div>
+              </div>
+            ))}
+            {loading&&(
+              <div style={{maxWidth:"85%",marginBottom:10,alignSelf:"flex-start"}}>
+                <div style={{padding:"12px 16px",borderRadius:11,background:offWhite,border:`1px solid ${border}`,display:"flex",gap:5,alignItems:"center"}}>
+                  {[0,.2,.4].map((d,i)=>(
+                    <span key={i} style={{width:7,height:7,background:muted,borderRadius:"50%",display:"inline-block",animation:`chatpulse 1s ${d}s ease-in-out infinite`}}/>
+                  ))}
+                </div>
+              </div>
+            )}
+            {msgs.length===1&&!loading&&(
+              <div style={{marginTop:8}}>
+                {QUICK_PROMPTS_CU.map((q,i)=>(
+                  <button key={i} onClick={()=>send(q)} style={{display:"block",width:"100%",textAlign:"left",padding:"8px 12px",marginBottom:6,background:offWhite,border:`1px solid ${border}`,borderRadius:6,fontSize:".8125rem",color:ink,cursor:"pointer"}}>
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div ref={bottomRef}/>
+          </div>
+          <div style={{borderTop:`1px solid ${border}`,padding:"11px 13px",display:"flex",gap:10,alignItems:"center",background:white,borderRadius:"0 0 12px 12px"}}>
+            <input style={{flex:1,border:"none",outline:"none",fontSize:".875rem",background:"transparent",fontFamily:CFG.FONTS?.body||"sans-serif",color:ink}}
+              placeholder="Ask about accounts, loans, transfers…"
+              value={input} onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} disabled={loading}/>
+            <button onClick={()=>send()} disabled={!input.trim()||loading}
+              style={{width:32,height:32,borderRadius:"50%",border:"none",background:input.trim()?primary:"#E8E5DE",cursor:input.trim()?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background .2s"}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={input.trim()?white:muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function InstitutionApp() {
   const [route,setRoute] = useState(getRoute());
   const nav = (r) => { window.history.pushState({},"",`/${r==="public"?"":r}`); setRoute(r); };
   if (route==="teller") return <TellerPortal  onBack={()=>nav("public")}/>;
   if (route==="admin")  return <AdminPortal   onBack={()=>nav("public")}/>;
-  if (route==="member") return <MemberPortal  onBack={()=>nav("public")}/>;
-  return <PublicSite onNav={nav}/>;
+  return (
+    <>
+      <ChatWidgetCU session={null}/>
+      {route==="member" ? <MemberPortal onBack={()=>nav("public")}/> : <PublicSite onNav={nav}/>}
+    </>
+  );
 }
