@@ -1,11 +1,8 @@
-# Never commit these
-obp.env
-pgdata/
-data/
-*.db
 node_modules/
-frontend/node_modules/
-frontend/dist/
+dist/
+.env
+*.bak.*
 *.log
-token.txt
-auth.sh
+backups/
+*.sql
+.DS_Store
